@@ -54,7 +54,7 @@ initData <- function() {
 }
 
 
-# --------------------graphics code -------------------
+# --------------------graphics code convexity vs linear -------------------
 
 convexity_chart <- function(yields, chartnum) {
     # data come from yieldData
@@ -88,10 +88,40 @@ convexity_spread <- function(yields, chartnum) {
     return(plt1)
 }
 
+# --------------------graphics code convexity formula -------------------
+
+
+convex_price_from_rate <- function(rate, years) {
+    100 / (1 + rate) ** years
+}
+
+data_for_chart <- function(years, start_rate, end_rate, entry_rate) {
+    rates <- seq(start_rate, end_rate, by = 0.0005)
+    convprices <- convex_price_from_rate(rate = rates, years = years)
+    linear <- predict(lm(convprices ~ rates))
+    linearadj <- linear + (convprices - linear)[rates == entry_rate]
+}
+
+linconv_chart <- function(chartnum) {
+    data1 <- data_for_chart(years = 10, start_rate = 0.00, end_rate = 0.05, entry_rate = 0.025)
+    datamelt <- melt(data1, id = c("rates"))
+
+}
+
+
+
+# ------------------- do it all -----------------------------------
+
 dodo <- function(topng = FALSE) {
+    
+    # chart 3
+    chartsize <- c(9, 5)
+    linconv_chart(3)
+
+    # chart 1 and 2
+    chartsize <- c(9, 5)
     cc1 <- convexity_chart(data1, 1)
     cc2 <- convexity_spread(data1, 2)
-    chartsize <- c(9, 5)
     if(topng) {
         png("cc1.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -99,6 +129,10 @@ dodo <- function(topng = FALSE) {
     }
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
+
+
+
+
 }
 
 
