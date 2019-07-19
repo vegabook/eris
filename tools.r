@@ -1,10 +1,9 @@
 # We will produce a nice set of tools to use in R
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load(xts)
-pacman::p_load(lattice)
-pacman::p_load(quantreg)
-pacman::p_load(grid) # for pushing viewports onto ggplots
-pacman::p_load(glmnet)
+library(xts)
+library(lattice)
+library(quantreg)
+library(grid) # for pushing viewports onto ggplots
+library(glmnet)
 
 if(Sys.info()["sysname"] == "Windows") library("Rblpapi") # only load bberg if on Windows
 

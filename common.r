@@ -1,14 +1,8 @@
 #THIS IS SET OF ROUTINES COMMONLY USED BY THOMAS BROWNE ANALYSES USING BLOOMBERG
 
+library(reshape2)
+library(xts)
 
-if (!require("pacman")) install.packages("pacman")
-pacman::p_load("reshape2") #for ccast function in bbdh
-if(Sys.info()["sysname"] == "Windows") {
-    pacman::p_load("Rblpapi") #for ccast function in bbdh
-    conn <<- blpConnect()
-}
-
-if (!exists("xts")) library(xts)
 
 gobb <- function() {
 # connect to the terminal
