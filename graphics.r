@@ -132,7 +132,6 @@ linconv_chart <- function(data, chartnum, titl) {
 }
 
 
-
 # ------------------- do it all -----------------------------------
 
 dodo <- function(topng = FALSE) {
