@@ -22,16 +22,27 @@ colourway = qualitative_hcl(4, palette = "Cold")
 
 # ------------------- data ----------------------
 chainData <- function(leader = "EDZ5 Comdty") {
+    # targets futureChain
     bds(leader, "fut chain")[, 1]
 }
 
+historicFutures <- function(futures) {
+    # futures come from chainData
+    # targets edfutures
+    na.locf(bbdh(futures, 5, "last price", asDateNotPosix = TRUE))
+}
+
+
 yieldData <- function(futures) {
     # futures come from chainData
-    data1 <- bdp(futures, c("mifid_maturity_date", "convexity_bias_basis_points", "convexity_adjusted_rate", "yld_ytm_mid"))
+    # targets data1
+    data1 <- bdp(futures, c("mifid_maturity_date", "convexity_bias_basis_points", 
+                            "convexity_adjusted_rate", "yld_ytm_mid"))
     data1 <- na.omit(data1)
     colnames(data1) <- c("maturity", "convexity_bps", "convexity_adjusted", "linear_yield")
     data1["contract"] = rownames(data1)
-    data1["labels"] = apply(data1, 1, function(x) paste(strsplit(x[5], " ")[[1]][1], format(as.Date(x[1]), "%b-%y")))
+    data1["labels"] = apply(data1, 1, function(x) paste(strsplit(x[5], " ")[[1]][1], 
+                                                        format(as.Date(x[1]), "%b-%y")))
     data1
 }
 
@@ -48,13 +59,13 @@ loadData <- function() {
     structures <<- structures
 }
 
-loadData()
-
 initData <- function() {
     futureChain <<- chainData()
     data1 <<- yieldData(futureChain)
+    edfutures <<- historicFutures(futureChain)
     structures <<- list("futureChain" = futureChain, 
-                      "data1" = data1)
+                      "data1" = data1,
+                      "edfutures" = edfutures)
 }
 
 
@@ -131,6 +142,21 @@ linconv_chart <- function(data, chartnum, titl) {
 
 }
 
+
+# ed futures indices
+
+maturity_matrix <- function(futureHistory, maturityData) {
+    # parameters would be edfutures and data1 respectively
+    date_data <- as.data.frame(t(replicate(nrow(futureHistory), 
+                 maturityData[paste(colnames(futureHistory), "Comdty"), "maturity"])))
+    maturities <- apply(date_data, 2, function(x) x - as.numeric(index(futureHistory)))
+    browser()
+    # get of vector of maturity dates
+    # find above minimum of maturity dates of which each date is > (greater than)
+    # create matrix for each maturity date
+    # whenever changes column, rebalance futures. 
+
+}
 
 # ------------------- do it all -----------------------------------
 
