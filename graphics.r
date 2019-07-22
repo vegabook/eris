@@ -178,6 +178,7 @@ ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7
     do.call(cbind.xts, tris)
 }
 
+
 eris_sheet_tri <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv") {
     # parses Geoff Sharp's csv. Assumes:
     #   * dates in column 1
@@ -200,9 +201,6 @@ eris_sheet_tri <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv
     return(trix)
 }
 
-
-
-# ------------------- do it all -----------------------------------
 
 dodo <- function(topng = FALSE) {
     mm <- ed_tris(edhistoric, dataOld)
@@ -247,7 +245,7 @@ dodo <- function(topng = FALSE) {
 
 }
 
-dodo(F)
+xx <- dodo(F)
 
 
 
