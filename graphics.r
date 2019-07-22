@@ -56,11 +56,10 @@ saveData <- function(structures) {
 }
 
 loadData <- function() {
-    load("structures.dat")
+    load("structures.dat", envir = .GlobalEnv)
     for(s in names(structures)) {
         assign(s, structures[[s]], envir = .GlobalEnv)
     }
-    structures <<- structures
 }
 
 initData <- function() {
@@ -70,12 +69,16 @@ initData <- function() {
     dataOld <<- yieldData(oldFutureChain)
     edfutures <<- historicFutures(futureChain)
     edhistoric <<- historicFutures(oldFutureChain)
+    edtris <<- ed_tris(edhistoric, dataOld)
+    eristris <<- eris_sheet_tris()
     structures <<- list("futureChain" = futureChain, 
                         "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
                       "dataOld" = dataOld,
                       "edfutures" = edfutures,
-                      "edhistoric" = edhistoric)
+                      "edhistoric" = edhistoric,
+                      "edtris" = edtris,
+                      "eristris" = eristris)
 }
 
 
@@ -154,7 +157,7 @@ linconv_chart <- function(data, chartnum, titl) {
 # -------------------- ed futures indicies -------------------
 
 ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7)) {
-    # parameters would be edfutures and data1 respectively
+    # parameters would be edhistoric and dataOld respectively
     fh <- futureHistory[, !(apply(futureHistory, 2, function(x) all(is.na(x))))]
     fh <- fh[, paste(colnames(fh), "Comdty") %in% maturityData[, "contract"]]
     datedata <- as.data.frame(t(replicate(nrow(fh), 
@@ -179,7 +182,7 @@ ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7
 }
 
 
-eris_sheet_tri <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv") {
+eris_sheet_tris <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv") {
     # parses Geoff Sharp's csv. Assumes:
     #   * dates in column 1
     #   * series start in row 6
@@ -196,21 +199,86 @@ eris_sheet_tri <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv
     dates <- csv[-(1:5), 1]
     dates <- as.Date(sapply(strsplit(dates, "/"), function(x) paste(x[3], x[1], x[2], sep = "-")))
     series <- csv[-(1:5), tricols]
+    series[series == ""] <- NA
     trix <- xts(series, order.by = dates)
+    storage.mode(trix) <- "numeric"
     colnames(trix) <- paste(names, codes, sep = ":")
     return(trix)
 }
 
+tri_data <- function(ed, eris, edselect = "EDM23", erisselect = "5Y Jun 2018-2023:LIWM18") {
+    # parameters would be edhistoric and eristris
+    bound <- na.omit(na.locf(cbind(ed[, edselect], eris[, erisselect])))
+    return(bound)
+}
+
+
+# -------------------- graphics code beta chart and regression -------------------
+
+tri_line <- function(data, chartnum, titl) {
+    # data come from tri_data
+    dfdata <- as.data.frame(data)
+    dfdata[, 1] <- dfdata[, 1] / as.numeric(dfdata[1, 1])
+    dfdata[, 2] <- dfdata[, 2] / as.numeric(dfdata[1, 2])
+    dfdata["date"] <- index(data)
+    melted <- melt(dfdata, id = "date")
+    plt1 <- ggplot(melted, aes(x = date, y = value, col = variable))
+    plt1 <- plt1 + geom_line(lwd = 1)
+    plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+    plt1 <- plt1 + theme(legend.position = "bottom")
+    plt1 <- plt1 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
+    return(plt1)
+}
+
+
+tri_regress <- function(data, chartnum, titl) {
+    # data come from tri_data
+    x12m <- last(data, "12 months")
+    x12m[, 1] <- x12m[, 1] / as.numeric(x12m[1, 1])
+    x12m[, 2] <- x12m[, 2] / as.numeric(x12m[1, 2])
+    x1w <- last(x12m, "1 week")
+    x3m <- last(x12m, "3 months")
+    x1d <- last(x12m, "1 day")
+    x1w <- as.data.frame(x1w)
+    x12m <- as.data.frame(x12m)
+    x3m <- as.data.frame(x3m)
+    x1d <- as.data.frame(x1d)
+    x1w["period"] <- rep("1w", nrow(x1w))
+    x12m["period"] <- rep("1y", nrow(x12m))
+    x3m["period"] <- rep("3m", nrow(x3m))
+    x1d["period"] <- rep("1d", nrow(x1d))
+    xall <- rbind(x12m, x3m, x1w, x1d)
+    xall$period <- factor(xall$period, levels = c("1y", "3m", "1w", "1d"))
+    n1 <- colnames(xall)[1]
+    n2 <- colnames(xall)[2]
+    plt1 <- ggplot(xall, aes_string(x = n1, y = n2, col = "period"))
+    plt1 <- plt1 + geom_point(size = 3)
+    # add regression line
+    plt1 <- plt1 + geom_smooth(method = "lm", lty = "dashed", col = "grey")
+    plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+    plt1 <- plt1 + theme(legend.position = "bottom")
+    plt1 <- plt1 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    plt1 <- plt1 + scale_colour_discrete_sequential(palette = "Sunset")
+    # add regression line
+    return(plt1)
+}
+
 
 dodo <- function(topng = FALSE) {
-    mm <- ed_tris(edhistoric, dataOld)
-    ee <- eris_sheet_tri()
-    return()
 
-    # chart 3 and 4
+    # chart 1 and 2
     chartsize <- c(9, 5)
-    cc1 <- convexity_chart(data1, 3)
-    cc2 <- convexity_spread(data1, 4)
+    edselect = "EDM23"
+    erisselect = "5Y Jun 2018-2023:LIWM18"
+    trid <- tri_data(edhistoric, eristris, edselect, erisselect)
+    trid <- last(trid, "12 months")
+    cc1 <- tri_line(trid, 1, paste("TRI performanced:", edselect, "vs Eris", erisselect))
+    cc2 <- tri_regress(trid, 2, paste("Eris 5y 3.6 beta against EDM23"))
     if(topng) {
         png("cc1.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -219,7 +287,7 @@ dodo <- function(topng = FALSE) {
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
 
-    # chart 1 and 2
+    # chart 3 and 4
     data1 <- data_for_chart(start_price = 102.5, 
                             years = 2, 
                             start_rate = -0.05,
@@ -233,8 +301,20 @@ dodo <- function(topng = FALSE) {
                             entry_rate = 0.025)
 
     chartsize <- c(9, 5)
-    cc1 <- linconv_chart(data1, 1, "Convexity effect - 2y instrument")
-    cc2 <- linconv_chart(data2, 2, "Convexity effect - 10y instrument")
+    cc1 <- linconv_chart(data1, 3, "Convexity effect - 2y instrument")
+    cc2 <- linconv_chart(data2, 4, "Convexity effect - 10y instrument")
+    if(topng) {
+        png("cc3.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(cc1, cc2, nrow = 1)
+    if(topng) dev.off()
+
+    # chart 5 and 6
+    chartsize <- c(9, 5)
+    cc1 <- convexity_chart(data1, 5)
+    cc2 <- convexity_spread(data1, 6)
     if(topng) {
         png("cc2.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -242,7 +322,6 @@ dodo <- function(topng = FALSE) {
     }
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
-
 }
 
 xx <- dodo(F)
