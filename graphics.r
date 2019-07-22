@@ -26,24 +26,28 @@ chainData <- function(leader = "EDZ5 Comdty") {
     bds(leader, "fut chain")[, 1]
 }
 
+OldChainData <- function(start = 14, end = 26) {
+    apply(expand.grid(c("H", "M", "U", "Z"), start:end), 1, function(x) {
+          paste("ED", x[1], x[2], " Comdty", sep = "")
+    })
+}
+
 historicFutures <- function(futures) {
     # futures come from chainData
     # targets edfutures
     na.locf(bbdh(futures, 5, "last price", asDateNotPosix = TRUE))
 }
 
-
 yieldData <- function(futures) {
     # futures come from chainData
     # targets data1
-    data1 <- bdp(futures, c("mifid_maturity_date", "convexity_bias_basis_points", 
+    data <- bdp(futures, c("mifid_maturity_date", "convexity_bias_basis_points", 
                             "convexity_adjusted_rate", "yld_ytm_mid"))
-    data1 <- na.omit(data1)
-    colnames(data1) <- c("maturity", "convexity_bps", "convexity_adjusted", "linear_yield")
-    data1["contract"] = rownames(data1)
-    data1["labels"] = apply(data1, 1, function(x) paste(strsplit(x[5], " ")[[1]][1], 
+    colnames(data) <- c("maturity", "convexity_bps", "convexity_adjusted", "linear_yield")
+    data["contract"] = rownames(data)
+    data["labels"] = apply(data, 1, function(x) paste(strsplit(x[5], " ")[[1]][1], 
                                                         format(as.Date(x[1]), "%b-%y")))
-    data1
+    return(data)
 }
 
 
@@ -61,11 +65,17 @@ loadData <- function() {
 
 initData <- function() {
     futureChain <<- chainData()
-    data1 <<- yieldData(futureChain)
+    oldFutureChain <<- OldChainData()
+    data1 <<- na.omit(yieldData(futureChain))
+    dataOld <<- yieldData(oldFutureChain)
     edfutures <<- historicFutures(futureChain)
+    edhistoric <<- historicFutures(oldFutureChain)
     structures <<- list("futureChain" = futureChain, 
+                        "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
-                      "edfutures" = edfutures)
+                      "dataOld" = dataOld,
+                      "edfutures" = edfutures,
+                      "edhistoric" = edhistoric)
 }
 
 
@@ -103,7 +113,7 @@ convexity_spread <- function(yields, chartnum) {
     return(plt1)
 }
 
-# --------------------graphics code convexity formula -------------------
+# -------------------- graphics code convexity formula -------------------
 
 
 convex_price_from_rate <- function(start_price, rates, years) {
@@ -136,32 +146,68 @@ linconv_chart <- function(data, chartnum, titl) {
     plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
     plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
     plt1 <- plt1 + geom_vline(xintercept = 0, colour = "grey65", lty = "dashed")
-
-
     return(plt1)
 
 }
 
 
-# ed futures indices
+# -------------------- ed futures indicies -------------------
 
-maturity_matrix <- function(futureHistory, maturityData) {
+ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7)) {
     # parameters would be edfutures and data1 respectively
-    date_data <- as.data.frame(t(replicate(nrow(futureHistory), 
-                 maturityData[paste(colnames(futureHistory), "Comdty"), "maturity"])))
-    maturities <- apply(date_data, 2, function(x) x - as.numeric(index(futureHistory)))
-    browser()
-    # get of vector of maturity dates
-    # find above minimum of maturity dates of which each date is > (greater than)
-    # create matrix for each maturity date
-    # whenever changes column, rebalance futures. 
-
+    fh <- futureHistory[, !(apply(futureHistory, 2, function(x) all(is.na(x))))]
+    fh <- fh[, paste(colnames(fh), "Comdty") %in% maturityData[, "contract"]]
+    datedata <- as.data.frame(t(replicate(nrow(fh), 
+                 maturityData[paste(colnames(fh), "Comdty"), "maturity"])))
+    dtm <- xts(apply(datedata, 2, function(x) x - as.numeric(index(fh))), 
+               order.by = index(fh)) # days to maturity
+    fhr <- diffret(fh)
+    # returns of *relevant* contracts for each maturity
+    idxs <- lapply(maturityYears, function(x) { 
+                       xx <- fhr
+                       xx[dtm[-1, ] < (x * 365)] <- NA
+                       return(xx)
+                    })
+    names(idxs) <- as.character(maturityYears)
+    tris <- lapply(idxs, function(x) {
+               thisret <- apply(x, 1, function(y) na.omit(y)[1])
+               thistri <- genseries(thisret, logrets = F)
+               thisxts <- xts(thistri, order.by = index(futureHistory))
+               return(thisxts)
+    })
+    do.call(cbind.xts, tris)
 }
+
+eris_sheet_tri <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv") {
+    # parses Geoff Sharp's csv. Assumes:
+    #   * dates in column 1
+    #   * series start in row 6
+    #   * word "SettlementPrice" is at the top of each TRI
+    #   * rows 2 and 3 contain short name and zcode respectively
+    #   If any of the above change, the routine below will not work
+
+    csv <- read.csv(sheetname, stringsAsFactors = F, header = F)
+    tricols <- sapply(csv[5, ], function(x) grepl("SettlementPrice", x))
+    names <- csv[2, -1]
+    names <- names[names != ""]
+    codes <- csv[3, -1]
+    codes <- codes[codes != ""]
+    dates <- csv[-(1:5), 1]
+    dates <- as.Date(sapply(strsplit(dates, "/"), function(x) paste(x[3], x[1], x[2], sep = "-")))
+    series <- csv[-(1:5), tricols]
+    trix <- xts(series, order.by = dates)
+    colnames(trix) <- paste(names, codes, sep = ":")
+    return(trix)
+}
+
+
 
 # ------------------- do it all -----------------------------------
 
 dodo <- function(topng = FALSE) {
-    
+    mm <- ed_tris(edhistoric, dataOld)
+    ee <- eris_sheet_tri()
+    return()
 
     # chart 3 and 4
     chartsize <- c(9, 5)
@@ -175,7 +221,7 @@ dodo <- function(topng = FALSE) {
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
 
-    # chart 3 and 4
+    # chart 1 and 2
     data1 <- data_for_chart(start_price = 102.5, 
                             years = 2, 
                             start_rate = -0.05,
@@ -201,7 +247,7 @@ dodo <- function(topng = FALSE) {
 
 }
 
-dodo(T)
+dodo(F)
 
 
 
