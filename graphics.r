@@ -4,6 +4,7 @@ source("tools.r")
 source("common.r")
 
 library(ggplot2)
+library(ggpmisc)
 library(colorspace)
 library(gridExtra)
 
@@ -51,8 +52,8 @@ yieldData <- function(futures) {
 }
 
 
-saveData <- function(structures) {
-    save(structures, file = "structures.dat")
+saveData <- function(strucs) {
+    save(strucs, file = "structures.dat")
 }
 
 loadData <- function() {
@@ -90,7 +91,6 @@ convexity_chart <- function(yields, chartnum) {
                  id = c("maturity"))
     plt1 <- ggplot(data, aes(x = maturity, y = value, col = variable))
     plt1 <- plt1 + geom_line(lwd = 1)
-    #plt1 <- plt1 + geom_point(col = colourway[1], fill = "white", pch = 21, size = 2)
     plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
     plt1 <- plt1 + theme(legend.position = "bottom")
     plt1 <- plt1 + labs(title = "Convexity-adjusted vs linear EuroDollar rates",
@@ -107,7 +107,6 @@ convexity_spread <- function(yields, chartnum) {
                  id = c("maturity"))
     plt1 <- ggplot(data, aes(x = maturity, y = value, col = variable))
     plt1 <- plt1 + geom_line(lwd = 1)
-    #plt1 <- plt1 + geom_point(col = colourway[1], fill = "white", pch = 21, size = 2)
     plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
     plt1 <- plt1 + theme(legend.position = "bottom")
     plt1 <- plt1 + labs(title = "Value of convexity in bps",
@@ -254,22 +253,42 @@ tri_regress <- function(data, chartnum, titl) {
     xall$period <- factor(xall$period, levels = c("1y", "3m", "1w", "1d"))
     n1 <- colnames(xall)[1]
     n2 <- colnames(xall)[2]
-    plt1 <- ggplot(xall, aes_string(x = n1, y = n2, col = "period"))
-    plt1 <- plt1 + geom_point(size = 3)
+    plt1 <- ggplot(xall, aes_string(x = n1, y = n2, fill = "period"))
+    plt1 <- plt1 + geom_point(size = 3, col = "white", pch = 21)
     # add regression line
+    myformula <- n2 ~ n1
     plt1 <- plt1 + geom_smooth(method = "lm", lty = "dashed", col = "grey")
     plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
     plt1 <- plt1 + theme(legend.position = "bottom")
     plt1 <- plt1 + labs(title = titl,
                         subtitle = paste("Chart", chartnum))
     plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
-    plt1 <- plt1 + scale_colour_discrete_sequential(palette = "Sunset")
-    # add regression line
+    plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
+
+
+    # add regression equation
+	lm_eqn <- function(df) {
+		m <- lm(y ~ x, data = df)
+		eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+			 list(a = format(unname(coef(m)[1]), digits = 3),
+				  b = format(unname(coef(m)[2]), digits = 3),
+				 r2 = format(summary(m)$r.squared, digits = 3)))
+		as.character(as.expression(eq))
+	}
+	xydf <- xall
+    colnames(xydf) <- c("x", "y", "period")
+    eqtext <- lm_eqn(xydf)
+    eqxpos <- range(xydf$x)[1] + diff(range(xydf$x)) * 1 / 3
+    eqypos <- range(xydf$y)[1] + diff(range(xydf$y)) * 3 / 4
+
+
+	plt1 <- plt1 + geom_text(x = eqxpos, y = eqypos, label = eqtext, parse = T, col = "grey40")
     return(plt1)
 }
-
+	
 
 dodo <- function(topng = FALSE) {
+    # do all the graphics. 
 
     # chart 1 and 2
     chartsize <- c(9, 5)
@@ -277,8 +296,8 @@ dodo <- function(topng = FALSE) {
     erisselect = "5Y Jun 2018-2023:LIWM18"
     trid <- tri_data(edhistoric, eristris, edselect, erisselect)
     trid <- last(trid, "12 months")
-    cc1 <- tri_line(trid, 1, paste("TRI performanced:", edselect, "vs Eris", erisselect))
-    cc2 <- tri_regress(trid, 2, paste("Eris 5y 3.6 beta against EDM23"))
+    cc1 <- tri_line(trid, 1, paste("TRI performance", edselect, "vs Eris", erisselect))
+    cc2 <- tri_regress(trid, 2, paste("Eris 5y high beta against EDM23"))
     if(topng) {
         png("cc1.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -287,22 +306,24 @@ dodo <- function(topng = FALSE) {
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
 
+    # TODO possible similar vs 10Y eris
+
     # chart 3 and 4
-    data1 <- data_for_chart(start_price = 102.5, 
+    data3 <- data_for_chart(start_price = 102.5, 
                             years = 2, 
                             start_rate = -0.05,
                             end_rate = 0.05, 
                             entry_rate = 0.025)
 
-    data2 <- data_for_chart(start_price = 102.5, 
+    data4 <- data_for_chart(start_price = 102.5, 
                             years = 10, 
                             start_rate = -0.05,
                             end_rate = 0.05, 
                             entry_rate = 0.025)
 
     chartsize <- c(9, 5)
-    cc1 <- linconv_chart(data1, 3, "Convexity effect - 2y instrument")
-    cc2 <- linconv_chart(data2, 4, "Convexity effect - 10y instrument")
+    cc1 <- linconv_chart(data3, 3, "Convexity effect - 2y instrument")
+    cc2 <- linconv_chart(data4, 4, "Convexity effect - 10y instrument")
     if(topng) {
         png("cc3.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -324,7 +345,6 @@ dodo <- function(topng = FALSE) {
     if(topng) dev.off()
 }
 
-xx <- dodo(F)
 
 
 
