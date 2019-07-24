@@ -72,6 +72,7 @@ initData <- function() {
     edhistoric <<- historicFutures(oldFutureChain)
     edtris <<- ed_tris(edhistoric, dataOld)
     eristris <<- eris_sheet_tris()
+    irstris <<- irs_tris()
     structures <<- list("futureChain" = futureChain, 
                         "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
@@ -79,8 +80,31 @@ initData <- function() {
                       "edfutures" = edfutures,
                       "edhistoric" = edhistoric,
                       "edtris" = edtris,
+                      "irstris" = irstris,
                       "eristris" = eristris)
 }
+
+test_regressions <- function(xts1, xts2, sort = F) {
+    # tests which regress best from all series in xts1 vs all series in xts2
+    allcolsx2 <- expand.grid(colnames(xts1), colnames(xts2))
+    flushprint(paste("will be testing", nrow(allcolsx2), "combinations"))
+    tests <- apply(allcolsx2, 1, function(x) {
+              x2 <- na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]])))
+              x2r <- diffret(x2)
+              lmrsq <- round(summary(lm(x2[, 1] ~ x2[, 2]))$r.squared, 4)
+              lmrrsq <- round(summary(lm(x2r[, 1] ~ x2r[, 2]))$r.squared, 4)
+              n <- nrow(x2)
+              c(lmrsq, lmrrsq, n, x)
+    })
+    tests <- t(tests)
+    colnames(tests) <- c("rsq", "ret_rsq", "good", "var1", "var2")
+    if(sort) tests <- tests[order(tests[, "rsq"], decreasing = T), ]
+    return(tests)
+}
+
+        
+    
+
 
 
 # --------------------graphics code convexity vs linear -------------------
@@ -177,9 +201,12 @@ ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7
                thisxts <- xts(thistri, order.by = index(futureHistory))
                return(thisxts)
     })
-    do.call(cbind.xts, tris)
+    tris <- do.call(cbind.xts, tris)
+    colnames(tris) <- paste("ED", maturityYears, "y", sep = "")
+    return(tris)
 }
 
+# -------------------- eris tris from sheet -------------------
 
 eris_sheet_tris <- function(sheetname = "Eris_Historical_Prices_For_Standards.csv") {
     # parses Geoff Sharp's csv. Assumes:
@@ -209,6 +236,17 @@ tri_data <- function(ed, eris, edselect = "EDM23", erisselect = "5Y Jun 2018-202
     # parameters would be edhistoric and eristris
     bound <- na.omit(na.locf(cbind(ed[, edselect], eris[, erisselect])))
     return(bound)
+}
+
+# -------------------- USD curve TRIs --------------------------------------
+
+irs_tris <- function(sheetname = "./usd_irs_pnl/usdpnl.csv") {
+    csv <- read.csv(sheetname, stringsAsFactors = F, header = T)
+    csvx <- xts(csv[, -which(colnames(csv) %in% c("X", "dates"))], order.by = as.Date(csv[, "dates"]))
+    cumx <- apply(csvx / 1e4, 2, cumsum) + 100 # move from base zero, notional 100, to base 100 notional 100
+    colnames(cumx) <- paste("IRS", gsub("\\.", "", gsub("X", "", colnames(cumx))) -> colnames(cumx))
+    cumx <- xts(cumx, order.by = index(csvx))
+    return(cumx)
 }
 
 
@@ -281,14 +319,20 @@ tri_regress <- function(data, chartnum, titl) {
     eqxpos <- range(xydf$x)[1] + diff(range(xydf$x)) * 1 / 3
     eqypos <- range(xydf$y)[1] + diff(range(xydf$y)) * 3 / 4
 
-
 	plt1 <- plt1 + geom_text(x = eqxpos, y = eqypos, label = eqtext, parse = T, col = "grey40")
     return(plt1)
 }
 	
+# -------------------- US TRIs -------------------
+
+
 
 dodo <- function(topng = FALSE) {
     # do all the graphics. 
+
+    irstris <- irs_tris()
+    return()
+
 
     # chart 1 and 2
     chartsize <- c(9, 5)
@@ -305,8 +349,6 @@ dodo <- function(topng = FALSE) {
     }
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
-
-    # TODO possible similar vs 10Y eris
 
     # chart 3 and 4
     data3 <- data_for_chart(start_price = 102.5, 
@@ -343,6 +385,8 @@ dodo <- function(topng = FALSE) {
     }
     grid.arrange(cc1, cc2, nrow = 1)
     if(topng) dev.off()
+
+
 }
 
 
