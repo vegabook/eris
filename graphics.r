@@ -57,9 +57,9 @@ saveData <- function(strucs) {
 }
 
 loadData <- function() {
-    load("structures.dat", envir = .GlobalEnv)
-    for(s in names(structures)) {
-        assign(s, structures[[s]], envir = .GlobalEnv)
+    load("structures.dat")
+    for(s in names(strucs)) {
+        print(s)
     }
 }
 
@@ -73,7 +73,7 @@ initData <- function() {
     edtris <<- ed_tris(edhistoric, dataOld)
     eristris <<- eris_sheet_tris()
     irstris <<- irs_tris()
-    structures <<- list("futureChain" = futureChain, 
+    strucs <<- list("futureChain" = futureChain, 
                         "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
                       "dataOld" = dataOld,
@@ -84,21 +84,23 @@ initData <- function() {
                       "eristris" = eristris)
 }
 
-test_regressions <- function(xts1, xts2, sort = F) {
+test_regressions <- function(xts1, xts2, samplesize = 260, sort = F) {
     # tests which regress best from all series in xts1 vs all series in xts2
     allcolsx2 <- expand.grid(colnames(xts1), colnames(xts2))
     flushprint(paste("will be testing", nrow(allcolsx2), "combinations"))
     tests <- apply(allcolsx2, 1, function(x) {
-              x2 <- na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]])))
-              x2r <- diffret(x2)
+              x2 <- head(na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]]))), samplesize)
+              x2r <- head(diffret(x2), samplesize)
               lmrsq <- round(summary(lm(x2[, 1] ~ x2[, 2]))$r.squared, 4)
               lmrrsq <- round(summary(lm(x2r[, 1] ~ x2r[, 2]))$r.squared, 4)
               n <- nrow(x2)
               c(lmrsq, lmrrsq, n, x)
     })
-    tests <- t(tests)
+    tests <- as.data.frame(t(tests))
     colnames(tests) <- c("rsq", "ret_rsq", "good", "var1", "var2")
-    if(sort) tests <- tests[order(tests[, "rsq"], decreasing = T), ]
+    tests <- split(tests, unique(tests$var1))
+    tests <- lapply(tests, function(x) x[order(x$ret_rsq, decreasing = T), ])
+    tests <- tests[substr(names(tests), 5, 6) == "3m"]
     return(tests)
 }
 
@@ -331,6 +333,7 @@ dodo <- function(topng = FALSE) {
     # do all the graphics. 
 
     irstris <- irs_tris()
+    browser()
     return()
 
 
