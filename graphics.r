@@ -72,7 +72,8 @@ initData <- function() {
     edhistoric <<- historicFutures(oldFutureChain)
     edtris <<- ed_tris(edhistoric, dataOld)
     eristris <<- eris_sheet_tris()
-    irstris <<- irs_tris()
+    irstris <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl.csv") 
+    irstrisnoroll <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl_noroll.csv") 
     strucs <<- list("futureChain" = futureChain, 
                         "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
@@ -81,6 +82,7 @@ initData <- function() {
                       "edhistoric" = edhistoric,
                       "edtris" = edtris,
                       "irstris" = irstris,
+                      "irstrisnoroll" = irstrisnoroll,
                       "eristris" = eristris)
 }
 
@@ -90,17 +92,26 @@ test_regressions <- function(xts1, xts2, samplesize = 260, sort = F) {
     flushprint(paste("will be testing", nrow(allcolsx2), "combinations"))
     tests <- apply(allcolsx2, 1, function(x) {
               x2 <- head(na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]]))), samplesize)
-              x2r <- head(diffret(x2), samplesize)
-              lmrsq <- round(summary(lm(x2[, 1] ~ x2[, 2]))$r.squared, 4)
-              lmrrsq <- round(summary(lm(x2r[, 1] ~ x2r[, 2]))$r.squared, 4)
-              n <- nrow(x2)
-              c(lmrsq, lmrrsq, n, x)
+              if(nrow(x2) == samplesize) {
+                  x2r <- head(diffret(x2), samplesize)
+                  lmrsq <- round(summary(lm(x2[, 1] ~ x2[, 2]))$r.squared, 4)
+                  lmrrsq <- round(summary(lm(x2r[, 1] ~ x2r[, 2]))$r.squared, 4)
+                  n <- nrow(x2)
+                  c(lmrsq, lmrrsq, n, x)
+              } else {
+                  c(NA, NA, nrow(x2), x)
+              }
     })
     tests <- as.data.frame(t(tests))
+    tests[, 1] <- as.numeric(levels(tests[, 1]))[tests[, 1]]
+    tests[, 2] <- as.numeric(levels(tests[, 2]))[tests[, 2]]
+    tests[, 3] <- as.numeric(levels(tests[, 3]))[tests[, 3]]
+    tests[, 4] <- as.character(levels(tests[, 4]))[tests[, 4]]
+    tests[, 5] <- as.character(levels(tests[, 5]))[tests[, 5]]
     colnames(tests) <- c("rsq", "ret_rsq", "good", "var1", "var2")
     tests <- split(tests, unique(tests$var1))
     tests <- lapply(tests, function(x) x[order(x$ret_rsq, decreasing = T), ])
-    tests <- tests[substr(names(tests), 5, 6) == "3m"]
+    tests <- tests[substr(names(tests), 5, 6) %in% c("3m", "1y")]
     return(tests)
 }
 
