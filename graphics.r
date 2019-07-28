@@ -135,36 +135,46 @@ test_regressions <- function(xts1, xts2, samplesize = 260, sort = F, k = 10) {
     return(tests)
 }
 
-regressions_chart <- function(regdata, chartnum) {
+regressions_chart <- function(regdata, colournum = 1) {
     regcomplete <- regdata[sapply(regdata, function(x) !is.null(x))]
     graphs <- lapply(regcomplete, function(rr) {
-        rrdat <- rr$data
+        rrdat <- data.frame(rr$data)
         colnames(rrdat) <- gsub("\\.", "_", colnames(rrdat))
         n1 <- colnames(rrdat)[1]
         n2 <- colnames(rrdat)[2]
         plt1 <- ggplot(rrdat, aes_string(x = n1, y = n2))
-        plt1 <- plt1 + geom_point() 
-        browser()
+        plt1 <- plt1 + geom_point(size = 3, col = "white", pch = 21, fill = colourway[colournum])
+        # add regression line
+        myformula <- n2 ~ n1
+        plt1 <- plt1 + geom_smooth(method = "lm", lty = "dashed", col = "grey")
+        plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+        plt1 <- plt1 + theme(legend.position = "bottom")
+        titl <- gsub("X", "", (gsub("_", " ", n2)))
+        plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+        plt1 <- plt1 + labs(title = titl)
+        plt1 <- plt1 + theme(plot.title = element_text(colour = "dodgerblue"))
+        plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
+
+        # add regression equation
+        lm_eqn <- function(df) {
+            m <- lm(y ~ x, data = df)
+            eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+                 list(a = format(unname(coef(m)[1]), digits = 3),
+                      b = format(unname(coef(m)[2]), digits = 3),
+                     r2 = format(summary(m)$r.squared, digits = 3)))
+            as.character(as.expression(eq))
+        }
+        xydf <- rrdat
+        colnames(xydf) <- c("x", "y")
+        eqtext <- lm_eqn(xydf)
+        eqxpos <- range(xydf$x)[1] + diff(range(xydf$x)) * 1 / 3
+        eqypos <- range(xydf$y)[1] + diff(range(xydf$y)) * 3 / 4
+        plt1 <- plt1 + geom_text(x = eqxpos, y = eqypos, label = eqtext, parse = T, col = "grey40")
+
+        return(plt1)
     })
-
     return(graphs)
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-    
 
 
 
@@ -236,7 +246,6 @@ linconv_chart <- function(data, chartnum, titl) {
     return(plt1)
 
 }
-
 
 # -------------------- ed futures indicies -------------------
 
@@ -362,9 +371,8 @@ tri_regress <- function(data, chartnum, titl) {
     plt1 <- plt1 + theme(legend.position = "bottom")
     plt1 <- plt1 + labs(title = titl,
                         subtitle = paste("Chart", chartnum))
-    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue", size = 4))
     plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
-
 
     # add regression equation
 	lm_eqn <- function(df) {
@@ -392,15 +400,39 @@ tri_regress <- function(data, chartnum, titl) {
 dodo <- function(topng = FALSE) {
     # do all the graphics. 
 
-    # chart 7 and 8
-    data5y <- test_regressions(filter_irs(irstris, "5y", "1y"), 
+    data5y <- test_regressions(filter_irs(irstris, "5y", "3m"), 
                                filter_eris(eristris, "5y"), 
                                samplesize = 260)
-    regressions_chart(data5y, 7)
-    return()
+    charts5y <- regressions_chart(data5y, 3)
+    l6 <- last(charts5y, 6)
+    chartsize <- c(9, 13)
+    if(topng) {
+        png("ccr5y.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(l6[[1]], l6[[2]], l6[[3]], l6[[4]], l6[[5]], l6[[6]],
+                 ncol = 2, nrow = 3, 
+                 top = textGrob("Regressions versus IRS 10y",
+                                 gp = gpar(fontsize = 16)))
+    if(topng) dev.off()
 
-
-
+    data10y <- test_regressions(filter_irs(irstris, "10y", "3m"), 
+                               filter_eris(eristris, "10y"), 
+                               samplesize = 260)
+    charts10y <- regressions_chart(data10y, 4)
+    l6 <- last(charts10y, 6)
+    chartsize <- c(9, 13)
+    if(topng) {
+        png("ccr10y.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(l6[[1]], l6[[2]], l6[[3]], l6[[4]], l6[[5]], l6[[6]],
+                 ncol = 2, nrow = 3, 
+                 top = textGrob("Regressions versus IRS 10y",
+                                 gp = gpar(fontsize = 16)))
+    if(topng) dev.off()
 
     # chart 1 and 2
     chartsize <- c(9, 5)
@@ -426,7 +458,7 @@ dodo <- function(topng = FALSE) {
                             entry_rate = 0.025)
 
     data4 <- data_for_chart(start_price = 102.5, 
-                            years = 10, 
+                            years = 10,
                             start_rate = -0.05,
                             end_rate = 0.05, 
                             entry_rate = 0.025)
