@@ -7,6 +7,8 @@ library(ggplot2)
 library(ggpmisc)
 library(colorspace)
 library(gridExtra)
+library(lme4)
+library(parallel)
 
 # ------------------- utilities ----------------------
 
@@ -57,7 +59,7 @@ saveData <- function(strucs) {
 }
 
 loadData <- function() {
-    load("structures.dat")
+    load("structures.dat", envir = .GlobalEnv)
     for(s in names(strucs)) {
         print(s)
     }
@@ -75,7 +77,7 @@ initData <- function() {
     irstris <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl.csv") 
     irstrisnoroll <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl_noroll.csv") 
     strucs <<- list("futureChain" = futureChain, 
-                        "oldFutureChain" = oldFutureChain,
+                      "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
                       "dataOld" = dataOld,
                       "edfutures" = edfutures,
@@ -86,34 +88,80 @@ initData <- function() {
                       "eristris" = eristris)
 }
 
-test_regressions <- function(xts1, xts2, samplesize = 260, sort = F) {
+
+# --------------- regressions of eris versus irs to show good fit -----------------
+
+filter_irs <- function(irstris, matperiod, fwdperiod = "3m") {
+    # use this function to filter the first input to test_regressions for speed
+    qual <- paste(fwdperiod, tolower(matperiod), sep = "")  
+    ep <- irstris[, sapply(strsplit(colnames(irstris), " "), function(x) x[2] == qual)]
+    return(ep)
+}
+
+
+filter_eris <- function(eristris, period) {
+    # use this function to filter the second input to test_regressions for speed
+    ep <- eristris[, sapply(strsplit(colnames(eristris), " "), function(x) tolower(x[1]) == tolower(period))]
+    months <- match(sapply(strsplit(colnames(ep), " "), function(x) x[2]), month.abb)
+    years <- sapply(colnames(ep), function(x) strsplit(strsplit(x, "-")[[1]][2], ":")[[1]][1])
+    returnorder <- order(paste(years, months))
+    return(ep[, returnorder])
+}
+
+test_regressions <- function(xts1, xts2, samplesize = 260, sort = F, k = 10) {
     # tests which regress best from all series in xts1 vs all series in xts2
     allcolsx2 <- expand.grid(colnames(xts1), colnames(xts2))
     flushprint(paste("will be testing", nrow(allcolsx2), "combinations"))
-    tests <- apply(allcolsx2, 1, function(x) {
-              x2 <- head(na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]]))), samplesize)
-              if(nrow(x2) == samplesize) {
-                  x2r <- head(diffret(x2), samplesize)
-                  lmrsq <- round(summary(lm(x2[, 1] ~ x2[, 2]))$r.squared, 4)
-                  lmrrsq <- round(summary(lm(x2r[, 1] ~ x2r[, 2]))$r.squared, 4)
-                  n <- nrow(x2)
-                  c(lmrsq, lmrrsq, n, x)
-              } else {
-                  c(NA, NA, nrow(x2), x)
-              }
+    splits <- split(as.matrix(allcolsx2), seq(nrow(allcolsx2)))
+    tests <- lapply(splits, function(x) {
+              x2 <- na.omit(na.locf(cbind(xts1[, x[1]], xts2[, x[2]])))
+              if(nrow(x2) > samplesize) {
+                  rollregs <- rollapply(x2, samplesize, function(rollx2) {
+                      rollx2r <- diffret(rollx2)
+                      lmrsq <- round(summary(lm(rollx2[, 1] ~ rollx2[, 2]))$r.squared, 7)
+                      lmrrsq <- round(summary(lm(rollx2r[, 1] ~ rollx2r[, 2]))$r.squared, 7)
+                      c(lmrsq, lmrrsq, range(index(rollx2)), x)
+                  }, by.column = F, by = k)
+                  best <- order(as.numeric(rollregs[, 2]), decreasing = T)[1]
+                  bestrange <- as.numeric(rollregs[best, ][, 3:4])
+                  data <- x2[(index(x2) >= as.Date(bestrange[1])) & (index(x2) <= as.Date(bestrange[2])), ]
+                  return(list("rsq" = as.numeric(rollregs[best, 1]),
+                              "rsqr" = as.numeric(rollregs[best, 2]),
+                              "data" = data))
+             } else {
+                 return(NULL)
+             }
     })
-    tests <- as.data.frame(t(tests))
-    tests[, 1] <- as.numeric(levels(tests[, 1]))[tests[, 1]]
-    tests[, 2] <- as.numeric(levels(tests[, 2]))[tests[, 2]]
-    tests[, 3] <- as.numeric(levels(tests[, 3]))[tests[, 3]]
-    tests[, 4] <- as.character(levels(tests[, 4]))[tests[, 4]]
-    tests[, 5] <- as.character(levels(tests[, 5]))[tests[, 5]]
-    colnames(tests) <- c("rsq", "ret_rsq", "good", "var1", "var2")
-    tests <- split(tests, unique(tests$var1))
-    tests <- lapply(tests, function(x) x[order(x$ret_rsq, decreasing = T), ])
-    tests <- tests[substr(names(tests), 5, 6) %in% c("3m", "1y")]
     return(tests)
 }
+
+regressions_chart <- function(regdata, chartnum) {
+    regcomplete <- regdata[sapply(regdata, function(x) !is.null(x))]
+    graphs <- lapply(regcomplete, function(rr) {
+        rrdat <- rr$data
+        colnames(rrdat) <- gsub("\\.", "_", colnames(rrdat))
+        n1 <- colnames(rrdat)[1]
+        n2 <- colnames(rrdat)[2]
+        plt1 <- ggplot(rrdat, aes_string(x = n1, y = n2))
+        plt1 <- plt1 + geom_point() 
+        browser()
+    })
+
+    return(graphs)
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
         
     
@@ -201,6 +249,7 @@ ed_tris <- function(futureHistory, maturityData, maturityYears = c(1, 2, 3, 5, 7
     dtm <- xts(apply(datedata, 2, function(x) x - as.numeric(index(fh))), 
                order.by = index(fh)) # days to maturity
     fhr <- diffret(fh)
+
     # returns of *relevant* contracts for each maturity
     idxs <- lapply(maturityYears, function(x) { 
                        xx <- fhr
@@ -343,9 +392,14 @@ tri_regress <- function(data, chartnum, titl) {
 dodo <- function(topng = FALSE) {
     # do all the graphics. 
 
-    irstris <- irs_tris()
-    browser()
+    # chart 7 and 8
+    data5y <- test_regressions(filter_irs(irstris, "5y", "1y"), 
+                               filter_eris(eristris, "5y"), 
+                               samplesize = 260)
+    regressions_chart(data5y, 7)
     return()
+
+
 
 
     # chart 1 and 2
