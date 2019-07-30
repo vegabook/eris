@@ -76,6 +76,7 @@ initData <- function() {
     eristris <<- eris_sheet_tris()
     irstris <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl.csv") 
     irstrisnoroll <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl_noroll.csv") 
+    irstriscoupon <<- irs_tris_coupon(dirname = "./usd_irs_pnl/")
     strucs <<- list("futureChain" = futureChain, 
                       "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
@@ -85,6 +86,7 @@ initData <- function() {
                       "edtris" = edtris,
                       "irstris" = irstris,
                       "irstrisnoroll" = irstrisnoroll,
+                      "irstriscoupon" = irstriscoupon,
                       "eristris" = eristris)
 }
 
@@ -94,7 +96,9 @@ initData <- function() {
 filter_irs <- function(irstris, matperiod, fwdperiod = "3m") {
     # use this function to filter the first input to test_regressions for speed
     qual <- paste(fwdperiod, tolower(matperiod), sep = "")  
-    ep <- irstris[, sapply(strsplit(colnames(irstris), " "), function(x) x[2] == qual)]
+    filterer1 <- sapply(strsplit(colnames(irstris), " "), function(x) x[2])
+    filterer2 <- sapply(strsplit(filterer1, "_"), function(x) x[1])
+    ep <- irstris[, filterer2 == qual]
     return(ep)
 }
 
@@ -319,6 +323,24 @@ irs_tris <- function(sheetname = "./usd_irs_pnl/usdpnl.csv") {
     cumx <- xts(cumx, order.by = index(csvx))
     return(cumx)
 }
+
+irs_tris_coupon <- function(dirname = "./usd_irs_pnl/") {
+    contents <- dir(dirname)
+    couponfiles <- paste(dirname, contents[grepl("coupon", contents)], sep = "")
+    couponed <- lapply(couponfiles, function(cf) {
+        thiscoupon <- read.csv(cf, stringsAsFactors = F)
+        thisdata <- read.csv(gsub("coupon", "pnl", cf))
+        thisdatand <- thisdata[, -c(1, ncol(thisdata))]
+        thiscouponnd <- thiscoupon[, -c(1, ncol(thiscoupon))]
+        colnames(thisdatand) <- paste(colnames(thisdatand), round(thiscouponnd[2, ], 3), sep = "_")
+        thisx <- xts(thisdatand, order.by = as.Date(thisdata[, 1]))
+        return(thisx)
+    })
+    xtsall <- do.call(cbind.xts, couponed)
+    colnames(xtsall) <- paste("IRS", gsub("\\.", "", gsub("X", "", colnames(xtsall))))
+    return(xtsall)
+}
+
 
 
 # -------------------- graphics code beta chart and regression -------------------
