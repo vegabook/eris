@@ -9,6 +9,7 @@ library(colorspace)
 library(gridExtra)
 library(lme4)
 library(parallel)
+library(leaps)
 
 # ------------------- utilities ----------------------
 
@@ -22,6 +23,15 @@ viewColours <- function() {
 cc <- function() source("graphics.r")
 
 colourway = qualitative_hcl(4, palette = "Cold")
+
+smooth_series <- function(ser, sds = 3) {
+    browser()
+    dser <- diff(ser)
+    bad <- abs(dser) > (sd(na.omit(dser)) * sds)
+    bad[is.na(bad)] <- FALSE
+    ser[bad] <- NA
+    na.locf(ser)
+}
 
 # ------------------- data ----------------------
 chainData <- function(leader = "EDZ5 Comdty") {
@@ -77,6 +87,7 @@ initData <- function() {
     irstris <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl.csv") 
     irstrisnoroll <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl_noroll.csv") 
     irstriscoupon <<- irs_tris_coupon(dirname = "./usd_irs_pnl/")
+    swapdata <<- swap_data()
     strucs <<- list("futureChain" = futureChain, 
                       "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
@@ -87,6 +98,7 @@ initData <- function() {
                       "irstris" = irstris,
                       "irstrisnoroll" = irstrisnoroll,
                       "irstriscoupon" = irstriscoupon,
+                      "swapdata" = swapdata,
                       "eristris" = eristris)
 }
 
@@ -415,19 +427,84 @@ tri_regress <- function(data, chartnum, titl) {
     return(plt1)
 }
 	
-# -------------------- US TRIs -------------------
+# -------------------- IRS PCA ---------------------------
 
+swap_data <- function(mats = c(2, 3, 5, 7, 10, 15, 20, 30), years = 10) {
+    na.locf(bbdh(paste("USSW", mats, " Curncy", sep = ""), years, asDateNotPosix == TRUE))
+}
+
+tri_select <- function(matx = irstris, mats = c(2, 3, 5, 7, 10, 15, 20, 30), years = 10) {
+    filtered <- lapply(mats, function(x) filter_irs(matx, paste(x, "y", sep = "")))
+    tris <- do.call(cbind, filtered)
+    colnames(tris) <- paste("tri", mats, sep = "")
+    return(tris)
+}
+
+all_reg_regressions <- function(inmat, alienmat, nvmx = 4, nbst = 1, rollperiod = NULL) {
+    # takes inmat, does regsubsets on each column for all other columns 
+    # takes alienmat and takes inmat weights and applies those too
+    # shows how tri data mining via inmat tris is better then IRS datamining via alienmat
+    if(ncol(inmat) != ncol(alienmat)) {
+        print("inmat and alienmat must have the same number of columns")
+        return(-1)
+    }
+    cols <- colnames(inmat)
+    regs <- lapply(cols, function(cl) {
+                       cli <- which(colnames(inmat) == cl)
+                       leftovermat <- inmat[, -cli]
+                       leftoveralien <- alienmat[, -cli]
+                       f <- as.formula(paste(cl, "~", paste(cols[-which(cols == cl)], collapse = " + ")))
+                       weights <- summary(regsubsets(f, data = inmat))$which[, -1]
+                       lapply(1:nrow(weights), function(i) {
+                            w <- weights[i, ]
+                            linmod <- lm(inmat[, cl] ~ leftovermat[, w])
+                            coeffs <- linmod$coefficients[-1]
+                            rsq <- summary(linmod)$r.squared
+                            resids <- xts(as.numeric(linmod$residuals), order.by = index(inmat))
+                            # now do the alienmat with the same 
+                            linmodalien <- lm(alienmat[, cli] ~ leftoveralien[, w])
+                            coeffsalien <- linmodalien$coefficients[-1]
+                            rsqalien <- summary(linmodalien)$r.squared
+                            residsalien <- xts(as.numeric(linmodalien$residuals), order.by = index(alienmat))
+                            inusingalien <- leftovermat[, w] %*% coeffsalien
+                            return(list(resids = resids,
+                                        residsalien = residsalien,
+                                        dependent = cl,
+                                        dependentalien = colnames(alienmat)[cli],
+                                        independent = colnames(leftovermat)[w],
+                                        independentalien = colnames(leftoveralien)[w],
+                                        coeffs = coeffs,
+                                        coeffsalien = coeffsalien,
+                                        rsq = rsq,
+                                        rsqalien = rsqalien,
+                                        inusingalien = inusingalien))
+                       })
+
+    })
+}
 
 
 dodo <- function(topng = FALSE) {
     # do all the graphics. 
 
+
+    # chart x and y for 
+
+
+    tri4regs <- last(tri_select(), "9 years")
+    irs4regs <- last(swapdata[index(tri4regs), ], "9 years")
+    regs <- all_reg_regressions(tri4regs, irs4regs, 5, 1)
+
+    browser()
+
+
+    # chart ? and ? # accuracy of eris versus tris
     data5y <- test_regressions(filter_irs(irstris, "5y", "3m"), 
                                filter_eris(eristris, "5y"), 
                                samplesize = 260)
     charts5y <- regressions_chart(data5y, 3)
     l6 <- last(charts5y, 6)
-    chartsize <- c(9, 13)
+    chartsize <- c(8, 12)
     if(topng) {
         png("ccr5y.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
     } else {
@@ -443,25 +520,41 @@ dodo <- function(topng = FALSE) {
                                filter_eris(eristris, "10y"), 
                                samplesize = 260)
     charts10y <- regressions_chart(data10y, 4)
-    l6 <- last(charts10y, 6)
-    chartsize <- c(9, 13)
+    l5 <- last(charts10y, 6)
+    chartsize <- c(8, 12)
     if(topng) {
         png("ccr10y.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
     } else {
         windows(chartsize[1], chartsize[2])
     }
-    grid.arrange(l6[[1]], l6[[2]], l6[[3]], l6[[4]], l6[[5]], l6[[6]],
+    grid.arrange(l5[[1]], l5[[2]], l5[[3]], l5[[4]], l5[[5]], l5[[6]],
                  ncol = 2, nrow = 3, 
                  top = textGrob("Regressions versus IRS 10y",
                                  gp = gpar(fontsize = 16)))
     if(topng) dev.off()
+
+
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("ccrsingle.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(l5[[3]], l6[[3]],
+                 ncol = 2, nrow = 1,
+                 top = textGrob("Sample of Eris vs IRS total return indices",
+                                 gp = gpar(fontsize = 13)))
+    if(topng) dev.off()
+
+
+
 
     # chart 1 and 2
     chartsize <- c(9, 5)
     edselect = "EDM23"
     erisselect = "5Y Jun 2018-2023:LIWM18"
     trid <- tri_data(edhistoric, eristris, edselect, erisselect)
-    trid <- last(trid, "12 months")
+    trid <- first(last(trid, "13 months"), "12 months")
     cc1 <- tri_line(trid, 1, paste("TRI performance", edselect, "vs Eris", erisselect))
     cc2 <- tri_regress(trid, 2, paste("Eris 5y high beta against EDM23"))
     if(topng) {
