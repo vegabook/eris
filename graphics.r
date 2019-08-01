@@ -25,8 +25,7 @@ cc <- function() source("graphics.r")
 colourway = qualitative_hcl(4, palette = "Cold")
 
 smooth_series <- function(ser, sds = 3) {
-    browser()
-    dser <- diff(ser)
+    dser <- diff(ser, 3)
     bad <- abs(dser) > (sd(na.omit(dser)) * sds)
     bad[is.na(bad)] <- FALSE
     ser[bad] <- NA
@@ -481,6 +480,11 @@ all_reg_regressions <- function(inmat, alienmat, nvmx = 4, nbst = 1, rollperiod 
                        })
 
     })
+}
+
+
+chart_line <- function(linedata) {
+    ggplot(linedata, aes(x = x, y = y)) + geom_line()
 }
 
 
