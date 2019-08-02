@@ -532,7 +532,7 @@ dodo <- function(topng = FALSE) {
 
     chartsize <- c(9, 5)
     if(topng) {
-        png("pnl_comparison_carry_nocarry", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+        png("pnl_comparison_carry_nocarry.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
     } else {
         windows(chartsize[1], chartsize[2])
     }
