@@ -32,6 +32,10 @@ smooth_series <- function(ser, sds = 3) {
     na.locf(ser)
 }
 
+xts_to_dataframe <- function(xt) {
+    data.frame(date = index(xt), coredata(xt))
+}
+
 # ------------------- data ----------------------
 chainData <- function(leader = "EDZ5 Comdty") {
     # targets futureChain
@@ -255,7 +259,6 @@ linconv_chart <- function(data, chartnum, titl) {
     plt1 <- plt1 + xlab("yield change")
     plt1 <- plt1 + ylab("price change")
     plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
-    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
     plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
     plt1 <- plt1 + geom_vline(xintercept = 0, colour = "grey65", lty = "dashed")
     return(plt1)
@@ -429,7 +432,7 @@ tri_regress <- function(data, chartnum, titl) {
 # -------------------- IRS PCA ---------------------------
 
 swap_data <- function(mats = c(2, 3, 5, 7, 10, 15, 20, 30), years = 10) {
-    na.locf(bbdh(paste("USSW", mats, " Curncy", sep = ""), years, asDateNotPosix == TRUE))
+    na.locf(bbdh(paste("USSW", mats, " Curncy", sep = ""), years, asDateNotPosix = TRUE))
 }
 
 tri_select <- function(matx = irstris, mats = c(2, 3, 5, 7, 10, 15, 20, 30), years = 10) {
@@ -465,7 +468,7 @@ all_reg_regressions <- function(inmat, alienmat, nvmx = 4, nbst = 1, rollperiod 
                             coeffsalien <- linmodalien$coefficients[-1]
                             rsqalien <- summary(linmodalien)$r.squared
                             residsalien <- xts(as.numeric(linmodalien$residuals), order.by = index(alienmat))
-                            inusingalien <- leftovermat[, w] %*% coeffsalien
+                            inusingalien <- xts(leftovermat[, w] %*% coeffsalien, order.by = index(inmat))
                             return(list(resids = resids,
                                         residsalien = residsalien,
                                         dependent = cl,
@@ -483,23 +486,100 @@ all_reg_regressions <- function(inmat, alienmat, nvmx = 4, nbst = 1, rollperiod 
 }
 
 
-chart_line <- function(linedata) {
-    ggplot(linedata, aes(x = x, y = y)) + geom_line()
+date_line_chart <- function(linedata, chartnum, titl, ylab, colx = 1) {
+    plt1 <- ggplot(linedata, aes(x = date, y = y)) + geom_line(col = colourway[colx], fill = colourway[colx])
+    plt1 <- plt1 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt1 <- plt1 + ylab(ylab)
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+}
+
+bar_chart <- function(bardata, chartnum, titl, ylab, ylims, colx = 1) {
+    plt1 <- ggplot(bardata, aes(x = variable, y = value)) 
+    plt1 <- plt1 + geom_bar(stat = "identity", col = colourway[colx], fill = colourway[colx])
+    plt1 <- plt1 + ylim(ylims[1], ylims[2])
+    plt1 <- plt1 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt1 <- plt1 + ylab(ylab)
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    #plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
 }
 
 
+
 dodo <- function(topng = FALSE) {
-    # do all the graphics. 
 
+    # chart x and y for showing carry
+    # these get their own data
 
-    # chart x and y for 
+    crycoup <- read.csv("./usd_irs_pnl/new/usd_roll_coupon.csv", stringsAsFactors = F)
+    crydv01 <- read.csv("./usd_irs_pnl/new/usd_roll_dv01.csv", stringsAsFactors = F)
+    crypnl <- read.csv("./usd_irs_pnl/new/usd_roll_pnl.csv", stringsAsFactors = F)
+
+    dd1 <- cumsum(na.omit(as.numeric(crydv01[-1, "X6m.5y"] * diff(crycoup[, "X6m.5y"]))))
+    dd2 <- scale(dd1, center = F, scale = T)
+    dd1 <- xts(dd1, order.by = as.Date(last(dv01$dates, length(dd1))))
+    dd1 <- xts_to_dataframe(dd1)
+    dd2 <- cumsum(na.omit(as.numeric(crypnl[, "X1w.5y"])))
+    dd2 <- scale(dd2, center = F, scale = T)
+    dd2 <- xts(dd2, order.by = as.Date(last(crypnl$dates, length(dd2))))
+    dd2 <- xts_to_dataframe(dd2)
+    colnames(dd1) <- c("date", "y")
+    colnames(dd2) <- c("date", "y")
+
+    cc1 <- date_line_chart(dd1, 16, "5y rolling P&L due only to rates moves", "normalised P&L", colx = 4)
+    cc2 <- date_line_chart(dd2, 17, "5y rolling P&L including carry", "normalised P&L", colx = 5)
+
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("pnl_comparison_carry_nocarry", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(cc1, cc2, ncol = 2, nrow = 1)
+    if(topng) dev.off()
+
+    # chart x and y for showing regrssions versus tri or IRS rate
 
 
     tri4regs <- last(tri_select(), "9 years")
     irs4regs <- last(swapdata[index(tri4regs), ], "9 years")
     regs <- all_reg_regressions(tri4regs, irs4regs, 5, 1)
+    regschoice = regs[[3]][[3]]
 
-    browser()
+    dd1 <- xts_to_dataframe(scale(smooth_series(regschoice$resids)))
+    dd2 <- xts_to_dataframe(scale(regschoice$inusingalien))
+    colnames(dd1) <- c("date", "y")
+    colnames(dd2) <- c("date", "y")
+
+    cc1 <- date_line_chart(dd1, 12, "Regression weighted series using Eris", "5y regressed against 3y, 7y and 10y")
+    cc2 <- date_line_chart(dd2, 13, "Regression weighted series using IRS yield", "5y regressed against 3y, 7y and 10y")
+
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("weights_series.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(cc1, cc2, ncol = 2, nrow = 1)
+    if(topng) dev.off()
+
+    dd1 <- data.frame(variable = c("3y", "5y", "7y"), value = as.numeric(regschoice$coeffs))
+    dd2 <- data.frame(variable = c("3y", "5y", "7y"), value = as.numeric(regschoice$coeffsalien))
+    ylims <- c(min(min(dd1$value), min(dd2$value)), max(max(dd1$value), max(dd2$value)))
+
+
+    cc1 <- bar_chart(dd1, 14, "Regression weights Eris", "weight", ylims, colx = 2)
+    cc2 <- bar_chart(dd2, 15, "Regression weights IRS yield", "weight", ylims, colx = 3)
+
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("weights_bars.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(cc1, cc2, ncol = 2, nrow = 1)
+    if(topng) dev.off()
 
 
     # chart ? and ? # accuracy of eris versus tris
@@ -549,8 +629,6 @@ dodo <- function(topng = FALSE) {
                  top = textGrob("Sample of Eris vs IRS total return indices",
                                  gp = gpar(fontsize = 13)))
     if(topng) dev.off()
-
-
 
 
     # chart 1 and 2
