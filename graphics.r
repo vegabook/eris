@@ -87,10 +87,12 @@ initData <- function() {
     edhistoric <<- historicFutures(oldFutureChain)
     edtris <<- ed_tris(edhistoric, dataOld)
     eristris <<- eris_sheet_tris()
+    irstrisnocarry <<- irs_tris_nocarry()
     irstris <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl.csv") 
     irstrisnoroll <<- irs_tris(sheetname = "./usd_irs_pnl/usdpnl_noroll.csv") 
     irstriscoupon <<- irs_tris_coupon(dirname = "./usd_irs_pnl/")
     swapdata <<- swap_data()
+    allregs <<- all_regs()
     strucs <<- list("futureChain" = futureChain, 
                       "oldFutureChain" = oldFutureChain,
                       "data1" = data1,
@@ -102,6 +104,8 @@ initData <- function() {
                       "irstrisnoroll" = irstrisnoroll,
                       "irstriscoupon" = irstriscoupon,
                       "swapdata" = swapdata,
+                      "irstrisnocarry" = irstrisnocarry,
+                      "allregs" = allregs,
                       "eristris" = eristris)
 }
 
@@ -355,7 +359,26 @@ irs_tris_coupon <- function(dirname = "./usd_irs_pnl/") {
     return(xtsall)
 }
 
-
+irs_tris_nocarry <- function(dirname = "./usd_irs_pnl/") {
+    contents <- dir(dirname)
+    pnl <- read.csv(paste(dirname, "usd_roll_pnl.csv", sep = ""), stringsAsFactors = F)
+    dv01 <- read.csv(paste(dirname, "usd_roll_dv01.csv", sep = ""), stringsAsFactors = F)
+    coup <- read.csv(paste(dirname, "usd_roll_coupon.csv", sep = ""), stringsAsFactors = F)
+    dates <- dv01$dates
+    dv01 <- dv01[-1, c(-1, -ncol(dv01))] # remove dates
+    pnl <- pnl[-1, c(-1, -ncol(pnl))] # remove dates
+    coup <- coup[-1, c(-1, -ncol(coup))] # remove dates
+    coupr <- apply(coup, 2, diff) * 100 * 100
+    pnlc <- last(dv01, nrow(coupr)) * coupr
+    pnlneut <- apply(pnlc, 2, cumsum)
+    pnlfull <- apply(pnl, 2, cumsum)
+    pnlfull <- pnlfull[-nrow(pnlfull), ]
+    pnlfull <- xts(pnlfull, order.by = as.Date(dates[c(-1, -length(dates))]))
+    pnlneut <- xts(pnlneut, order.by = as.Date(dates[c(-1, -length(dates))]))
+    colnames(pnlfull) <- paste("IRS", gsub("\\.", "", gsub("X", "", colnames(pnlfull))))
+    colnames(pnlneut) <- paste("IRS", gsub("\\.", "", gsub("X", "", colnames(pnlneut))))
+    return(list(pnlfull = pnlfull, pnlneut = pnlneut))
+}
 
 # -------------------- graphics code beta chart and regression -------------------
 
@@ -407,7 +430,7 @@ tri_regress <- function(data, chartnum, titl) {
     plt1 <- plt1 + theme(legend.position = "bottom")
     plt1 <- plt1 + labs(title = titl,
                         subtitle = paste("Chart", chartnum))
-    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue", size = 4))
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
     plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
 
     # add regression equation
@@ -429,7 +452,7 @@ tri_regress <- function(data, chartnum, titl) {
     return(plt1)
 }
 	
-# -------------------- IRS PCA ---------------------------
+# -------------------- IRS proper hedging ---------------------------
 
 swap_data <- function(mats = c(2, 3, 5, 7, 10, 15, 20, 30), years = 10) {
     na.locf(bbdh(paste("USSW", mats, " Curncy", sep = ""), years, asDateNotPosix = TRUE))
@@ -485,6 +508,13 @@ all_reg_regressions <- function(inmat, alienmat, nvmx = 4, nbst = 1, rollperiod 
     })
 }
 
+all_regs <- function() {
+    tri4regs <- last(tri_select(), "9 years")
+    irs4regs <- last(swapdata[index(tri4regs), ], "9 years")
+    regs <- all_reg_regressions(tri4regs, irs4regs, 5, 1)
+    return(regs)
+}
+
 
 date_line_chart <- function(linedata, chartnum, titl, ylab, colx = 1) {
     plt1 <- ggplot(linedata, aes(x = date, y = y)) + geom_line(col = colourway[colx], fill = colourway[colx])
@@ -506,8 +536,62 @@ bar_chart <- function(bardata, chartnum, titl, ylab, ylims, colx = 1) {
 }
 
 
+# -------------------- Long term outperforms ---------------------------
+
+lt_data <- function(in1 = irstrisnocarry,
+                    whichtris = c("IRS 3m2y", "IRS 3m5y", "IRS 3m10y")) {
+    pnlneut <- in1$pnlfull - in1$pnlneut
+    list(pnlfull = melt(xts_to_dataframe(in1$pnlfull[, whichtris]), id.vars = "date"),
+         pnlneut = melt(xts_to_dataframe(pnlneut[, whichtris]), id.vars = "date"))
+}
+
+lt_chart1 <- function(linedata = lt_data(), chartnum, titl) {
+    pnlfull <- linedata$pnlfull
+    plt1 <- ggplot(pnlfull, aes(x = date, y = value, col = variable)) 
+    plt1 <- plt1 + geom_line(lwd = 1)
+    plt1 <- plt1 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt1 <- plt1 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+    plt1 <- plt1 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    plt1 <- plt1 + scale_colour_discrete_qualitative(palette = "Cold")
+    plt1 <- plt1 + theme(legend.position = "bottom")
+    plt1 <- plt1 + scale_y_continuous(labels = function(x) format(x, scientific = F))
+    return(plt1)
+}
+
+lt_chart2 <- function(linedata = lt_data(), chartnum, titl) {
+    pnlneut <- linedata$pnlneut
+    plt2 <- ggplot(pnlneut, aes(x = date, y = value, col = variable)) 
+    plt2 <- plt2 + geom_line(lwd = 1)
+    plt2 <- plt2 + labs(title = titl,
+                        subtitle = paste("Chart", chartnum))
+    plt2 <- plt2 + theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+    plt2 <- plt2 + theme(plot.subtitle = element_text(colour = "dodgerblue"))
+    plt2 <- plt2 + scale_colour_discrete_qualitative(palette = "Cold")
+    plt2 <- plt2 + theme(legend.position = "bottom")
+    return(plt2)
+}
+
+# ----------------- alpha sprinkling ------------------
+
+
+
 
 dodo <- function(topng = FALSE) {
+
+    # pnl with carry vs without
+
+    cc1 <- lt_chart1(chartnum = 3, titl = "Total return on $1m notional")
+    cc2 <- lt_chart2(chartnum = 4, titl = "Total return carry and roll components")
+
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("nocarry.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 400)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    grid.arrange(cc1, cc2, ncol = 2, nrow = 1)
+    if(topng) dev.off()
 
     # chart x and y for showing carry
     # these get their own data
@@ -518,7 +602,7 @@ dodo <- function(topng = FALSE) {
 
     dd1 <- cumsum(na.omit(as.numeric(crydv01[-1, "X6m.5y"] * diff(crycoup[, "X6m.5y"]))))
     dd2 <- scale(dd1, center = F, scale = T)
-    dd1 <- xts(dd1, order.by = as.Date(last(dv01$dates, length(dd1))))
+    dd1 <- xts(dd1, order.by = as.Date(last(crydv01$dates, length(dd1))))
     dd1 <- xts_to_dataframe(dd1)
     dd2 <- cumsum(na.omit(as.numeric(crypnl[, "X1w.5y"])))
     dd2 <- scale(dd2, center = F, scale = T)
@@ -527,8 +611,8 @@ dodo <- function(topng = FALSE) {
     colnames(dd1) <- c("date", "y")
     colnames(dd2) <- c("date", "y")
 
-    cc1 <- date_line_chart(dd1, 16, "5y rolling P&L due only to rates moves", "normalised P&L", colx = 4)
-    cc2 <- date_line_chart(dd2, 17, "5y rolling P&L including carry", "normalised P&L", colx = 5)
+    cc1 <- date_line_chart(dd1, 10, "5y rolling P&L due only to rates moves", "normalised P&L", colx = 4)
+    cc2 <- date_line_chart(dd2, 11, "5y rolling P&L including carry", "normalised P&L", colx = 4)
 
     chartsize <- c(9, 5)
     if(topng) {
@@ -542,10 +626,7 @@ dodo <- function(topng = FALSE) {
     # chart x and y for showing regrssions versus tri or IRS rate
 
 
-    tri4regs <- last(tri_select(), "9 years")
-    irs4regs <- last(swapdata[index(tri4regs), ], "9 years")
-    regs <- all_reg_regressions(tri4regs, irs4regs, 5, 1)
-    regschoice = regs[[3]][[3]]
+    regschoice = allregs[[3]][[3]]
 
     dd1 <- xts_to_dataframe(scale(smooth_series(regschoice$resids)))
     dd2 <- xts_to_dataframe(scale(regschoice$inusingalien))
@@ -596,7 +677,7 @@ dodo <- function(topng = FALSE) {
     }
     grid.arrange(l6[[1]], l6[[2]], l6[[3]], l6[[4]], l6[[5]], l6[[6]],
                  ncol = 2, nrow = 3, 
-                 top = textGrob("Regressions versus IRS 10y",
+                 top = textGrob("Regressions versus IRS 5y",
                                  gp = gpar(fontsize = 16)))
     if(topng) dev.off()
 
@@ -661,8 +742,8 @@ dodo <- function(topng = FALSE) {
                             entry_rate = 0.025)
 
     chartsize <- c(9, 5)
-    cc1 <- linconv_chart(data3, 3, "Convexity effect - 2y instrument")
-    cc2 <- linconv_chart(data4, 4, "Convexity effect - 10y instrument")
+    cc1 <- linconv_chart(data3, 5, "Convexity effect - 2y instrument")
+    cc2 <- linconv_chart(data4, 6, "Convexity effect - 10y instrument")
     if(topng) {
         png("cc3.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
@@ -673,8 +754,8 @@ dodo <- function(topng = FALSE) {
 
     # chart 5 and 6
     chartsize <- c(9, 5)
-    cc1 <- convexity_chart(data1, 5)
-    cc2 <- convexity_spread(data1, 6)
+    cc1 <- convexity_chart(data1, 7)
+    cc2 <- convexity_spread(data1, 8)
     if(topng) {
         png("cc2.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 600)
     } else {
