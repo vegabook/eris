@@ -1,0 +1,6 @@
+dds = phoenix_value(curve, instruments[0]["i"], "cashflows")["Payment Date"]
+
+for x in range(30): print(curve.get_ql_object("USD:3M_SWAP.LIBOR").zeroRate(ql.Date.from_date(dds.iloc[x]), ql.ActualActual(), ql.Continuous))
+
+for x in range(30): print(curve.get_ql_object("USD:3M_SWAP.LIBOR").zeroRate(ql.Date.from_date(dds.iloc[x]), ql.ActualActual(), ql.Continuous))
+
