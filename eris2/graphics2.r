@@ -1,4 +1,5 @@
 gg <- function() source("graphics2.r") 
+if(Sys.info()[["sysname"]] == "Linux") windows <- function(w, h) x11(width = w, height = h)
 
 cashflows_chart <- function(topng = F) {
     chartsize <- c(9, 5)
@@ -42,7 +43,7 @@ cashflows2_chart <- function(topng = F) {
     if(topng) dev.off()
 }
 
-zero_charts<- function(topng = F) {
+zero_charts <- function(topng = F) {
     chartsize <- c(9, 5)
     if(topng) {
         png("zeros.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
@@ -72,19 +73,58 @@ zero_charts<- function(topng = F) {
     }
     barplot(as.matrix(floating[, c("discnov", "discoct")]), beside = T, ylim = c(0, 1), 
          names.arg = unlist(rep(floating[, "Payment.Date"], 2)), las = 2, cex.names = 0.9, 
-         col = c(rep("green3", 20), rep("darkgoldenrod2", 20)))
+         border = c(rep("green3", 20), rep("darkgoldenrod2", 20)), col = "grey90")
     abline(h = 1, lty = "dashed")
     if(topng) dev.off()
 
+}
+
+cf_tableNov <- function(topng = F) {
+    data <- read.csv("cashflows.csv")
+    discnov <- as.numeric(read.csv("discnov3018.txt", header = F)[, 1])
+    discoct <- as.numeric(read.csv("discoct1019.txt", header = F)[, 1])
+    zeronov <- as.numeric(substr(read.csv("zeronov3018.txt", header = F)[, 1], 1, 8))
+    zerooct <- as.numeric(substr(read.csv("zerooct1019.txt", header = F)[, 1], 1, 8))
+    data["discnov"] <- discnov
+    data["discoct"] <- discoct
+    data["zeronov"] <- zeronov
+    data["zerooct"] <- zerooct
+    data[, "Payment.Date"] <- as.Date(data[, "Payment.Date"])
+    fixed <- data[data[, "Is.Fixed"] == "True", ]
+    floating <- data[data[, "Is.Fixed"] == "False", ]
+    fixed["npv"] <- fixed[, "Amount"] * fixed[, "discnov"]
+    floating["npv"] <- floating[, "Amount"] * floating[, "discnov"]
+    write.csv(fixed, "fixednov.csv")
+    write.csv(floating, "floatingnov.csv")
+}
+
+cf_tableOct <- function(topng = F) {
+    data <- read.csv("cashflows2.csv")
+    discnov <- as.numeric(read.csv("discnov3018.txt", header = F)[, 1])
+    discoct <- as.numeric(read.csv("discoct1019.txt", header = F)[, 1])
+    zeronov <- as.numeric(substr(read.csv("zeronov3018.txt", header = F)[, 1], 1, 8))
+    zerooct <- as.numeric(substr(read.csv("zerooct1019.txt", header = F)[, 1], 1, 8))
+    data["discnov"] <- discnov
+    data["discoct"] <- discoct
+    data["zeronov"] <- zeronov
+    data["zerooct"] <- zerooct
+    data[, "Payment.Date"] <- as.Date(data[, "Payment.Date"])
+    fixed <- data[data[, "Is.Fixed"] == "True", ]
+    floating <- data[data[, "Is.Fixed"] == "False", ]
+    fixed["npv"] <- fixed[, "Amount"] * fixed[, "discoct"]
+    floating["npv"] <- floating[, "Amount"] * floating[, "discoct"]
+    write.csv(fixed, "fixedoct.csv")
+    write.csv(floating, "floatingoct.csv")
 }
 
 rr <- function(topng = F) {
     cashflows_chart(topng = topng)
     cashflows2_chart(topng = topng)
     zero_charts(topng = topng)
+    cf_tableNov(topng = topng)
+    cf_tableOct(topng = topng)
 }
     
-
 
 
 
