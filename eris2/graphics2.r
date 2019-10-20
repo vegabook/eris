@@ -1,5 +1,7 @@
 gg <- function() source("graphics2.r") 
 if(Sys.info()[["sysname"]] == "Linux") windows <- function(w, h) x11(width = w, height = h)
+source("../../rtools/tools.r")
+source("../../rtools/common.r")
 
 cashflows_chart <- function(topng = F) {
     chartsize <- c(9, 5)
@@ -117,12 +119,47 @@ cf_tableOct <- function(topng = F) {
     write.csv(floating, "floatingoct.csv")
 }
 
+reg_charts <- function(topng = F) {
+    data = load("cb2.data")
+    chartsize <- c(9, 5)
+    if(topng) {
+        png("reg1.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    par(mfrow = c(1, 2))
+    plot(cb2)
+    regress(cb2[, 1], cb2[, 2], ylab = "Eris 5y Sep19 LIWU19", xlab = "Calculated TRI from IRS market", 
+            main = "")
+    if(topng) dev.off()
+
+    chartsize <- c(5, 5)
+    if(topng) {
+        png("reg2.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    plot(cb2)
+    if(topng) dev.off()
+    chartsize <- c(5, 5)
+    if(topng) {
+        png("reg3.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
+    } else {
+        windows(chartsize[1], chartsize[2])
+    }
+    regress(cb2[, 1], cb2[, 2], ylab = "Eris 5y Sep19 LIWU19", xlab = "Calculated TRI from IRS market", 
+            main = "")
+    if(topng) dev.off()
+}
+
+
 rr <- function(topng = F) {
     cashflows_chart(topng = topng)
     cashflows2_chart(topng = topng)
     zero_charts(topng = topng)
     cf_tableNov(topng = topng)
     cf_tableOct(topng = topng)
+    reg_charts(topng = topng)
 }
     
 
