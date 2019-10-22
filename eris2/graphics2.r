@@ -121,35 +121,16 @@ cf_tableOct <- function(topng = F) {
 
 reg_charts <- function(topng = F) {
     data = load("cb2.data")
-    chartsize <- c(9, 5)
-    if(topng) {
-        png("reg1.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
-    } else {
-        windows(chartsize[1], chartsize[2])
-    }
-    par(mfrow = c(1, 2))
-    plot(cb2)
-    regress(cb2[, 1], cb2[, 2], ylab = "Eris 5y Sep19 LIWU19", xlab = "Calculated TRI from IRS market", 
-            main = "")
-    if(topng) dev.off()
 
-    chartsize <- c(5, 5)
-    if(topng) {
-        png("reg2.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
-    } else {
-        windows(chartsize[1], chartsize[2])
-    }
-    plot(cb2)
-    if(topng) dev.off()
-    chartsize <- c(5, 5)
-    if(topng) {
-        png("reg3.png", width = chartsize[1], height = chartsize[2], 5, units = "in", res = 200, pointsize = 12)
-    } else {
-        windows(chartsize[1], chartsize[2])
-    }
+    dev.new()
     regress(cb2[, 1], cb2[, 2], ylab = "Eris 5y Sep19 LIWU19", xlab = "Calculated TRI from IRS market", 
             main = "")
-    if(topng) dev.off()
+
+
+    dev.new()
+    plot(cb2)
+    legend("bottomleft", legend = c("Eris 5y Sep19 LIWU19", "Calculated TRI from IRS market"), 
+           fill = c("black", "red"))
 }
 
 
