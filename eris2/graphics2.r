@@ -122,15 +122,12 @@ cf_tableOct <- function(topng = F) {
 reg_charts <- function(topng = F) {
     data = load("cb2.data")
 
-    dev.new()
     regress(cb2[, 1], cb2[, 2], ylab = "Eris 5y Sep19 LIWU19", xlab = "Calculated TRI from IRS market", 
             main = "")
 
-
     dev.new()
-    plot(cb2)
-    legend("bottomleft", legend = c("Eris 5y Sep19 LIWU19", "Calculated TRI from IRS market"), 
-           fill = c("black", "red"))
+    colnames(cb2) <- c("Eris September 2019 LIWU19", "NPV of equivalent IRS from first principles")
+    plot(cb2, main = "Eris Futures vs equivalent IRS NPV", cex.main = 10, legend.loc = "bottomright")
 }
 
 
