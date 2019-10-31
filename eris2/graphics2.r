@@ -121,6 +121,7 @@ cf_tableOct <- function(topng = F) {
 
 reg_charts <- function(topng = F) {
     data = load("cb2.data")
+    dev.new()
 
     regress(cb2[, 1], cb2[, 5], xlab = "Eris 5y Sep19 LIWU19", ylab = "Calculated TRI from IRS market", 
             main = "")

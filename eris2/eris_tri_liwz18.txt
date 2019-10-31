@@ -1,0 +1,26 @@
+
+eris2_effectives = [dt.datetime(2019, 9, 18), dt.datetime(2019, 1, 1), dt.datetime(2021, 1, 1)]
+eris2_coupons = [("outright", 0.01), ("outright", 0.02), ("outright", 0.03), ("outright", 0.04), ("outright", 0.05)]
+eris2_rolls = [None]
+eris2_maturities = ["5y"]
+eris2_combos = transpose_descriptors(eris2_maturities, eris2_effectives, eris2_coupons, eris2_rolls)
+eris2_markets = make_tri_markets(dt.datetime(2018, 11, 30),
+                                 dt.datetime.today() - dt.timedelta(days = 1),
+                                 eris2_combos[0],
+                                 eris2_combos[1],
+                                 eris2_combos[2],
+                                 eris2_combos[3],
+                                 "irs")
+
+eris3_effectives = [dt.datetime(2018, 12, 19), dt.datetime(2018, 1, 1), dt.datetime(2020, 1, 1)]
+eris3_coupons = [("outright", 0.01), ("outright", 0.02), ("outright", 0.0275), ("outright", 0.04), ("outright", 0.05)]
+eris3_rolls = [None]
+eris3_maturities = ["5y"]
+eris3_combos = transpose_descriptors(eris3_maturities, eris3_effectives, eris3_coupons, eris3_rolls)
+eris3_markets = make_tri_markets(dt.datetime(2018, 1, 1),
+                                 dt.datetime.today() - dt.timedelta(days = 1),
+                                 eris3_combos[0],
+                                 eris3_combos[1],
+                                 eris3_combos[2],
+                                 eris3_combos[3],
+                                 "irs")
