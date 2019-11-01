@@ -132,6 +132,13 @@ reg_charts <- function(topng = F) {
     plot(toplot, main = "Eris Futures vs equivalent IRS NPV", cex.main = 10, legend.loc = "bottomright")
 }
 
+dec18_charts <- function(topng = F) {
+    data = load("pn8.dat")
+    dev.new()
+
+    regress(pn8$liwz18, pn8$mine, xlab = "Eris 5y Dec18 LIWZ18", ylab = "Calculated TRI from IRS market", 
+            main = "")
+}
 
 rr <- function(topng = F) {
     cashflows_chart(topng = topng)
@@ -140,6 +147,7 @@ rr <- function(topng = F) {
     cf_tableNov(topng = topng)
     cf_tableOct(topng = topng)
     reg_charts(topng = topng)
+    dec18_charts(topng = topng)
 }
     
 
