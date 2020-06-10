@@ -1,5 +1,5 @@
-source("../tools.r")
-source("../common.r")
+source("../../rtools/tools.r")
+source("../../rtools/common.r")
 library(data.table)
 library(ggplot2)
 library(cowplot)
@@ -125,14 +125,18 @@ BasisCurve <- function(basis) {
 	basis <- na.omit(na.locf(basis))
 	hair(as.data.frame(basis), 
 		 title = "History of SOFR vs LIBOR curve", ylab = "bps",
-		 withlegend = TRUE)
+		 withlegend = TRUE, 
+		 meancol = "green4")
 }
 
 
 plotall <- function(update_data = FALSE) {
 	if (!exists("aa") | update_data) aa <<- getall()
 	dev.new()
-	BasisCurve((aa$ai - aa$si)[, -which(colnames(aa$ai) == "15")])
+	xx <- (aa$ai - aa$si)[, -which(colnames(aa$ai) == "15")]
+	xx <- (aa$ai - aa$si)[, -which(colnames(aa$ai) %in% c("4", "15"))]
+	xx[xx < 0.1] <- NA
+	BasisCurve(xx)
 	dev.new()
 	SofrVsLiborVol(aa$sr, aa$l3)
 	dev.new()
