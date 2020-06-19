@@ -70,7 +70,7 @@ randomfixings <- function(view = F) {
 		startDate <- Sys.Date() - 1000
 		alldays <- as.Date(startDate:endDate) # create the list of all days
 		wdays <- alldays[!(weekdays(alldays) %in% c("Saturday", "Sunday"))]
-		wdays <- last(wdays, 520)
+		wdays <- last(wdays, 552)
 		return(wdays)
 	}
 
@@ -87,13 +87,21 @@ randomfixings <- function(view = F) {
 			}
 		}))
 	}
+	s1 <- c(rep(NA, 32), rnorm(520))
+	s2 <- c(rnorm(520), rep(NA, 32))
+	sdiff <- s2 - s1
+	s1[!is.na(sdiff)] <- s2[!is.na(sdiff)]
+	smean = rep(mean(na.omit(sdiff)), length(sdiff))
 	x8 <- x8 <- cbind(xx[, 6], xx[, 26])
-	x520 <- cbind(rnorm(520), rnorm(520))
-	x520 <- xts(x520, order.by = wdaylist())
-	c1 <- do.call(c, lapply(x8[, 1], function(x) rep(x, 65)))
-	c2 <- do.call(c, lapply(x8[, 2], function(x) rep(x, 65)))
-	data <- cbind(x520, c1, c2)
-	return(data)
+	
+	l1 <- c(rep(NA, 32), do.call(c, lapply(x8[, 1], function(x) rep(x, 65))))
+	l2 <- c(do.call(c, lapply(x8[, 2], function(x) rep(x, 65))), rep(NA, 32))
+	libdiff <- l2 - l1
+	libmean <- rep(mean(na.omit(libdiff)), length(libdiff))
+	frame <- data.frame(dates = wdaylist(), Libor1 = l1, Libor2 = l2, 
+					   Libor_diff = libdiff, Libor_mean = libmean,
+					   SOFR1 = s1, SOFR2 = s2, SOFR_diff = sdiff, SOFR_mean = smean)
+	return(frame)
 }
 
 getall <- function(years = histyears) {
@@ -164,9 +172,20 @@ BasisCurve <- function(basis) {
 		 meancol = "green4")
 }
 
-prandomfixings <- function(data = randomfixings()) {
-	frame <- cbind(as.Date(index(data)), data)
-	browser()
+prandomfixings <- function(frame = randomfixings()) {
+	m1 <- melt(frame[, c("dates", "Libor1", "Libor2", "Libor_mean")], id.vars = "dates")
+	m2 <- melt(frame[, c("dates", "SOFR1", "SOFR2", "SOFR_mean")], id.vars = "dates")
+	plt1 <- ggplot(m1, aes(x = dates, y = value, colour = variable)) + geom_line(lwd = 2, alpha = 0.5)
+	plt1 = plt1 + scale_colour_manual(values = c("#FF00FF", "#00FFFF", "#FFFF00"))
+	plt1 <- plt1 + ggtitle("Two LIBOR swaps, 8 fixings, 45 days offset")
+	plt2 <- ggplot(m2, aes(x = dates, y = value, colour = variable)) + geom_line(lwd = 2, alpha = 0.5)
+	plt2 = plt2 + scale_colour_manual(values = c("#FF00FF", "#00FFFF", "#FFFF00"))
+	plt2 <- plt2 + ggtitle("Two SOFR swaps, 520 fixings, 45 days offset")
+	dev.new()
+	plot(plt1, labels = "D")
+	dev.new()
+	plot(plt2, labels = "D")
+
 }
 
 
