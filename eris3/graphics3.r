@@ -62,6 +62,40 @@ libor3m <- function(years = histyears) {
 	return(data)
 }
 
+randomfixings <- function(view = F) {
+
+	wdaylist <- function() {
+	# creates a list of weekdays starting at startDate and ending at endDate
+		endDate <- Sys.Date()
+		startDate <- Sys.Date() - 1000
+		alldays <- as.Date(startDate:endDate) # create the list of all days
+		wdays <- alldays[!(weekdays(alldays) %in% c("Saturday", "Sunday"))]
+		wdays <- last(wdays, 520)
+		return(wdays)
+	}
+
+	years <- 2
+	set.seed(50)
+	xx <- sapply(1:30, function(x) rnorm(8))
+	diffs <- sapply(1:30, function(x) sapply(1:30, function(y) mean(xx[, x] - xx[, y])))
+	if(view) {
+		sapply(1:30, function(x) sapply(1:30, function(y) {
+			if((diffs[x, y] > 0.8) & (diffs[x, y] < 0.9)) {
+				dev.new()
+				barplot(xx[, x] - xx[, y])
+				title(paste(x, y))
+			}
+		}))
+	}
+	x8 <- x8 <- cbind(xx[, 6], xx[, 26])
+	x520 <- cbind(rnorm(520), rnorm(520))
+	x520 <- xts(x520, order.by = wdaylist())
+	c1 <- do.call(c, lapply(x8[, 1], function(x) rep(x, 65)))
+	c2 <- do.call(c, lapply(x8[, 2], function(x) rep(x, 65)))
+	data <- cbind(x520, c1, c2)
+	return(data)
+}
+
 getall <- function(years = histyears) {
 	sb <- sofrbasis(years)
 	li <- liborimplied(years)
@@ -71,6 +105,7 @@ getall <- function(years = histyears) {
 	l3 <- libor3m(years)
 	return(list(sb = sb, li = li, si = si, ai = ai, sr = sr, l3 = l3))
 }
+
 
 
 # --------------- PLOT -----------------
@@ -129,6 +164,12 @@ BasisCurve <- function(basis) {
 		 meancol = "green4")
 }
 
+prandomfixings <- function(data = randomfixings()) {
+	frame <- cbind(as.Date(index(data)), data)
+	browser()
+}
+
+
 
 plotall <- function(update_data = FALSE) {
 	if (!exists("aa") | update_data) aa <<- getall()
@@ -141,6 +182,9 @@ plotall <- function(update_data = FALSE) {
 	SofrVsLiborVol(aa$sr, aa$l3)
 	dev.new()
 	SofrVsIRSBasis(aa$sb)
+	dev.new()
+	xx <- randomfixings()
+	prandomfixings(xx)
 }
 
 
